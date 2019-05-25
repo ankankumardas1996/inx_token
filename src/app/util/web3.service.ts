@@ -21,38 +21,45 @@ export class Web3Service {
     });
   }
 
-  public bootstrapWeb3() {
-    // Checking if Web3 has been injected by the browser (Mist/MetaMask)
-    if (typeof window.web3 !== 'undefined') {
-      // Use Mist/MetaMask's provider
-      this.web3 = new Web3(window.web3.currentProvider);
-    } else {
-      console.log('No web3? You should consider trying MetaMask!');
-
-      // Hack to provide backwards compatibility for Truffle, which uses web3js 0.20.x
-      Web3.providers.HttpProvider.prototype.sendAsync = Web3.providers.HttpProvider.prototype.send;
-      // fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
-      this.web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+  public async bootstrapWeb3() {
+    // Modern dapp browsers..
+    if (window.ethereum) {
+      window.web3 = new Web3(window.ethereum);
+      try {
+        // Request account access if needed
+        await window.ethereum.enable();
+      } catch (error) {
+        // User denied account access...
+        console.log('Cannot send the transaction');
+      }
+    }
+    // Legacy dapp browsers...
+    else if (window.web3) {
+      window.web3 = new Web3(this.web3.currentProvider);
+    }
+    // Non-dapp browsers...
+    else {
+      console.log('Non-Ethereum browser detected. You should consider trying MetaMask!');
     }
 
-    setInterval(() => this.refreshAccounts(), 100);
+    setInterval(() => this.refreshAccounts(), 1000);
   }
 
   public async artifactsToContract(artifacts) {
-    if (!this.web3) {
+    if (!window.web3) {
       const delay = new Promise(resolve => setTimeout(resolve, 100));
       await delay;
       return await this.artifactsToContract(artifacts);
     }
 
     const contractAbstraction = contract(artifacts);
-    contractAbstraction.setProvider(this.web3.currentProvider);
+    contractAbstraction.setProvider(window.web3.currentProvider);
     return contractAbstraction;
 
   }
 
   private refreshAccounts() {
-    this.web3.eth.getAccounts((err, accs) => {
+    window.web3.eth.getAccounts((err, accs) => {
       console.log('Refreshing accounts');
       if (err != null) {
         console.warn('There was an error fetching your accounts.');
